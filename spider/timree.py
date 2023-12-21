@@ -1,0 +1,27 @@
+from bs4 import BeautifulSoup
+import requests
+
+url="https://www.dcard.tw/f/oit?tab=latest"
+headers ={'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0',
+          "Cookie":"_gcl_au=1.1.2044839712.1700456978; _ga=GA1.1.1815450109.1700456978; _cfuvid=I2btr5yj.Xwt0oJOIs3D7aMWB8WT5I3XVksfxm2A7N4-1701151048836-0-604800000; __cf_dm=YWRtaW46MDox.126.crc.cf4dca1e; NID=44901020; cf_clearance=6HCgvu7fJQpSXKeoez5WaMCBuCGbPsUeZEGLwCjhvmE-1701151061-0-1-d70ac7a0.cd0f6624.3b42c358-0.2.1701151061; dcsrd=2Gd6dhE_wN97dV4vQXce4vBI; _ga_DSM1GSYX4C=GS1.1.1701151053.8.1.1701151159.14.0.0; __cf_bm=ztv4mDtnSTxRPe33i9t_1Abzc7oNHzbARXt0I612ANw-1701152251-0-AZxhkkPsUhpxQngHeOELkQ6sw2cX4AXfLOyGeEJTk0vjqhjiaIJJUGTi9vtqCcujgumeCGUbBwC/kxOIZgk8MM0=; dcard-web-oauth-tk=eyJhY2Nlc3NUb2tlbiI6ImV5SmhiR2NpT2lKRlpFUlRRU0lzSW10cFpDSTZJbEpMTFVoZlRUUm9VVkpET1dzeFUxcEdZMEZ1UkRBMVZreFljV1JZUm1kUVZYQXdWbGx0YjJ4eWFqZzlJbjAuZXlKaGNIQWlPaUpqTW1VM05qTTVOUzB6T0dFeExUUTRaamN0WVRsbE1DMWhaamN6TldJNFpqZGpOREVpTENKbGVIQWlPakUzTURFeE5UTXhOVEVzSW1saGRDSTZNVGN3TVRFMU1qSTFNU3dpYVhKMElqb2laRFF4TWpBeU0yWXRaV1JpTlMwMFpUZzVMV0U1WTJVdE5XSmpPRFEzTTJJM01HWmxJaXdpYVhOeklqb2laR05oY21RaUxDSnFkR2tpT2lJNE1UUTFOR1ZoTlMxaVkySXdMVFE0WlRjdFlUYzJOeTA1WW1JeVlqZ3pNR0k0T1dJaUxDSnpZMjl3WlhNaU9sc2liV1Z0WW1WeUlpd2liV1Z0WW1WeU9uZHlhWFJsSWl3aVpXMWhhV3dpTENKbGJXRnBiRHAzY21sMFpTSXNJbVJsZG1salpTSXNJbVJsZG1salpUcDNjbWwwWlNJc0luQm9iM1J2SWl3aWJtOTBhV1pwWTJGMGFXOXVJaXdpWm05eWRXMGlMQ0ptYjNKMWJUcHpkV0p6WTNKcFltVWlMQ0p3YjNOMElpd2ljRzl6ZERwemRXSnpZM0pwWW1VaUxDSm1ZV05sWW05dmF5SXNJbkJvYjI1bElpd2ljR2h2Ym1VNmRtRnNhV1JoZEdVaUxDSndhRzl1WlRwM2NtbDBaU0lzSW5CbGNuTnZibUVpTENKd1pYSnpiMjVoT25OMVluTmpjbWxpWlNJc0ltTnZibVpwWnlJc0ltTnZibVpwWnpwM2NtbDBaU0lzSW5SdmEyVnVPbkpsZG05clpTSXNJbWxrWTJGeVpDSXNJblJ2Y0dsaklpd2lkRzl3YVdNNmMzVmljMk55YVdKbElpd2labVZsWkRwemRXSnpZM0pwWW1VaUxDSnNiMmRwYmxabGNtbG1hV05oZEdsdmJpSXNJbXh2WjJsdVZtVnlhV1pwWTJGMGFXOXVPblpsY21sbWVTSXNJbU52Ykd4bFkzUnBiMjRpTENKamIyeHNaV04wYVc5dU9uZHlhWFJsSWl3aVpuSnBaVzVrSWl3aVpuSnBaVzVrT25keWFYUmxJaXdpYldWemMyRm5aU0lzSW0xbGMzTmhaMlU2ZDNKcGRHVWlMQ0p3YjJ4c09uZHlhWFJsSWl3aWFXUmxiblJwZEhrNmRtRnNhV1JoZEdWa0lpd2liR2xyWlNJc0luSmxZV04wYVc5dUlpd2ljRzl6ZERwM2NtbDBaU0lzSW1OdmJXMWxiblE2ZDNKcGRHVWlMQ0p5WlhCdmNuUWlMQ0prYjNkdWRtOTBaU0lzSW5CbGNuTnZibUU2ZDNKcGRHVWlMQ0p0WlhOellXZGxPbkJ5YVhaaGRHVWlYU3dpYzJsa0lqb2lNRE0wT0RKa01Ua3RZakkwT0MwME9XSTVMVGd6T0RBdFkyVTNOVFk0TW1SaU5USXlJaXdpYzNWaUlqb2lPVGt5TlRFd01DSjkuZE5sUUlKQzhVLVhzOE9ZSUI0NWJDMU5IU2pyM18tOGFXV21LcmQ4X2FrM2RMM2NGNVZhTTNTMUtjT3BKQUR4QUs4QldPQ2kzVFNQUzJJNDJaZ242RGciLCJ0b2tlblR5cGUiOiJCZWFyZXIiLCJyZWZyZXNoVG9rZW4iOiJnVFVja2xHOFFXVzZCVDE4elY1UjZnPT0iLCJleHBpcmVzQXQiOiIyMDIzLTExLTI4VDA2OjMyOjMxLjAwMFoifQ==; dcard-web-oauth-tk.sig=18Ygd4A-wRKn2kaOwxrWaqwmL98"}
+
+# 發送HTTP請求並獲取HTML內容
+response = requests.get(url)
+
+if response.status_code == 200:
+    html_content = response.text
+
+    # 使用Beautiful Soup解析HTML
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # 使用屬性選擇器找到包含datetime屬性的time標籤
+    time_tag = soup.find('time', {'datetime': True})
+
+    # 提取datetime屬性的值
+    if time_tag:
+        datetime_value = time_tag['datetime']
+        print(f"Datetime value: {datetime_value}")
+    else:
+        print("No time tag found with datetime attribute.")
+else:
+    print(f"Failed to retrieve content. Status code: {response.status_code}")
