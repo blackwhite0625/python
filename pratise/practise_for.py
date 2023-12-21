@@ -12,7 +12,7 @@ for pop2 in reversed(range(1,10)):
 print("成功")
 
 #continue與break
-pop3 = "1093332-3232-434-32fre"
+pop3 = "109332-3232-434-32fre"
 for x in pop3:
     if x == "2":
         #遇到2會繼續執行
