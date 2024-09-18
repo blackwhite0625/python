@@ -21,4 +21,5 @@ English = int(input("Enter English:"))
 Average1 = (Math+English+Chinese)/3
 print("Chinese:",Chinese,"English:",English,"Math:",Math)
 # sep='\n' #分隔符
+# end=''#結尾符
 print ("Average:",int(Average1))
