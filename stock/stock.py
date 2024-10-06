@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit,
                             QTabWidget, QHBoxLayout, QGridLayout, QScrollArea,
                             QFrame, QSizePolicy)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QPalette, QColor
+from PyQt5.QtGui import QFont, QPalette, QColor, QIcon
 
 class DataFetchThread(QThread):
     finished = pyqtSignal(object)
@@ -98,7 +98,9 @@ class StockAnalyzerApp(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("智能股票分析器 3.0")
+        self.setWindowIcon(QIcon("icon.ico"))
+        
+        self.setWindowTitle("美股價值投資分析")
         self.setGeometry(100, 100, 1400, 900)  # 加大窗口尺寸
         
         # 創建中央小部件和總體布局
@@ -109,7 +111,7 @@ class StockAnalyzerApp(QMainWindow):
         main_layout.setContentsMargins(20, 20, 20, 20)  # 設置邊距
         
         # 頂部標題
-        title_label = QLabel("智能股票分析器")
+        title_label = QLabel("美股價值投資分析")
         title_label.setFont(QFont("Arial", 24, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title_label)
