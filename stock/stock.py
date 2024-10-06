@@ -98,8 +98,8 @@ class StockAnalyzerApp(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowIcon(QIcon("icon.ico"))
-        
+        self.setWindowIcon(QIcon("C:\progarming\github\Python\python\stock\icon.ico"))
+
         self.setWindowTitle("美股價值投資分析")
         self.setGeometry(100, 100, 1400, 900)  # 加大窗口尺寸
         
