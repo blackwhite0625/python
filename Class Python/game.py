@@ -94,16 +94,17 @@ class Boss:
 
 # 子彈類
 class Bullet:
-    def __init__(self, x, y, target_x, target_y, damage):
+    def __init__(self, x, y, target, damage):
         self.x = x
         self.y = y
         self.speed = 10
-        self.dx = target_x - x
-        self.dy = target_y - y
+        self.target = target
+        self.dx = target.x - x
+        self.dy = target.y - y
         dist = math.sqrt(self.dx ** 2 + self.dy ** 2)
         self.dx /= dist
         self.dy /= dist
-        self.damage = damage  # 子彈傷害
+        self.damage = damage
 
     def update(self):
         self.x += self.dx * self.speed
@@ -218,6 +219,7 @@ def main():
             bullets.append(bullet)
 
         # 玩家 2 控制（箭頭）
+          # 玩家 2 控制（箭頭）
         if keys[pygame.K_LEFT]:  # 左
             players[1].move(-players[1].speed, 0)
         if keys[pygame.K_RIGHT]:  # 右
@@ -226,10 +228,14 @@ def main():
             players[1].move(0, -players[1].speed)
         if keys[pygame.K_DOWN]:  # 下
             players[1].move(0, players[1].speed)
-        if keys[pygame.K_LSHIFT]:  # 玩家2攻擊
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-            bullet = Bullet(players[1].x + 25, players[1].y + 25, mouse_x, mouse_y, players[1].damage)
+        if keys[pygame.K_RETURN]:  # 玩家 2 攻擊
+         if enemies:  # 確保有敵人
+            closest_enemy = min(enemies, key=lambda enemy: math.hypot(enemy.x - players[1].x, enemy.y - players[1].y))
+            bullet = Bullet(players[1].x + 25, players[1].y + 25, closest_enemy, players[1].damage)
             bullets.append(bullet)
+
+
+
 
         # 更新敵人
         for enemy in enemies:
