@@ -2,6 +2,7 @@ import sys
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import statistics
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, 
                             QPushButton, QTextEdit, QVBoxLayout, QWidget, 
@@ -54,13 +55,19 @@ class DataFetchThread(QThread):
             current_ratio = info.get('currentRatio', "N/A")
             debt_to_equity = info.get('debtToEquity', "N/A")
             return_on_equity = info.get('returnOnEquity', "N/A")
+            
+            # 獲取行業平均本益比
+            industry_pe = self.get_industry_average_pe(info.get('sector'))
+            
+            # 獲取公司歷史本益比數據
+            historical_pe = self.get_historical_pe(ticker)
                 
             # 整合所有數據
             return {
                 'ticker': ticker,
                 'company_name': info.get('longName', "未知公司"),
                 'sector': info.get('sector', "未知行業"),
-                'current_price': hist_data['Close'].iloc[-1],  # 修改這一行
+                'current_price': hist_data['Close'].iloc[-1],
                 'pe_ratio': info.get('trailingPE', "N/A"),
                 'forward_pe': info.get('forwardPE', "N/A"),
                 'dividend_yield': info.get('dividendYield', "N/A"),
@@ -72,13 +79,20 @@ class DataFetchThread(QThread):
                 'debt_to_equity': debt_to_equity,
                 'return_on_equity': return_on_equity,
                 'hist_data': hist_data,
-                'ma50': hist_data['MA50'].iloc[-1],  # 修改這一行
-                'ma200': hist_data['MA200'].iloc[-1],  # 修改這一行
-                'rsi': hist_data['RSI'].iloc[-1],      # 修改這一行
+                'ma50': hist_data['MA50'].iloc[-1],
+                'ma200': hist_data['MA200'].iloc[-1],
+                'rsi': hist_data['RSI'].iloc[-1],
+                'industry_pe': industry_pe,
+                'historical_pe': historical_pe
             }
 
         except Exception as e:
             raise ValueError(f"獲取股票資料時出現錯誤: {str(e)}")
+            
+    def get_industry_average_pe(self, sector):
+        # 這裡應該實現獲取行業平均本益比的邏輯
+        # 為簡化示例，這裡返回一個虛擬值
+        return 20  # 實際應用中，這個值應該是動態獲取的
 
     def calculate_rsi(self, prices, periods=14):
         delta = prices.diff()
@@ -88,9 +102,39 @@ class DataFetchThread(QThread):
         return 100 - (100 / (1 + rs))
 
     def calculate_growth_rate(self, series):
+
         if len(series) >= 2:
             return ((series.iloc[0] - series.iloc[-1]) / series.iloc[-1] * 100)
         return "N/A"
+    
+    def get_historical_pe(self, ticker):
+        stock = yf.Ticker(ticker)
+        hist_data = stock.history(period="5y")
+        quarterly_financials = stock.quarterly_financials
+
+        historical_pe = []
+        
+        for date, price in hist_data['Close'].items():
+            if pd.isnull(price):  # 檢查價格是否為 NaN
+                continue
+            
+            # 確保日期是 tz-aware
+            if date.tzinfo is None:
+                date = date.tz_localize('UTC')
+
+            # 找到最近的季度財報，確保也是 tz-aware
+            closest_financial_date = min(
+                quarterly_financials.columns,
+                key=lambda d: abs(d.tz_localize('UTC') - date)  # 本行進行時區轉換
+            )
+            
+            eps = quarterly_financials.loc['Basic EPS', closest_financial_date]
+            if eps > 0:  # 避免除以零
+                pe = price / (eps * 4)  # 年化 EPS
+                historical_pe.append(pe)
+        
+        return historical_pe
+
 
 class StockAnalyzerApp(QMainWindow):
     def __init__(self):
@@ -311,7 +355,7 @@ class StockAnalyzerApp(QMainWindow):
         QMessageBox.warning(self, "分析錯誤", error_message)
         self.progress_bar.setValue(0)
         self.analyze_button.setEnabled(True)
-
+    
     def display_overview(self, data):
         # 檢查股息收益率的類型並轉換為數字
         dividend_yield = data['dividend_yield']
@@ -386,13 +430,25 @@ class StockAnalyzerApp(QMainWindow):
     def generate_investment_advice(self, data):
         advice = []
         
-        # 基於估值的建議
+        #需要修改
         if data['pe_ratio'] != "N/A" and isinstance(data['pe_ratio'], (int, float)):
-            if data['pe_ratio'] < 15:
-                advice.append("基於本益比，該股票可能被低估")
-            elif data['pe_ratio'] > 30:
-                advice.append("基於本益比，該股票可能被高估")
-        
+            current_pe = data['pe_ratio']
+            industry_pe = data['industry_pe']
+            historical_pe = data['historical_pe']
+            
+            # 與行業平均比較
+            if current_pe < industry_pe * 0.7:
+                advice.append(f"基於行業平均本益比（{industry_pe:.2f}），該股票可能被低估")
+            elif current_pe > industry_pe * 1.3:
+                advice.append(f"基於行業平均本益比（{industry_pe:.2f}），該股票可能被高估")
+            
+            # 與自身歷史數據比較
+            if historical_pe:
+                avg_historical_pe = statistics.mean(historical_pe)
+                if current_pe < avg_historical_pe * 0.7:
+                    advice.append(f"基於歷史平均本益比（{avg_historical_pe:.2f}），該股票當前價值可能被低估")
+                elif current_pe > avg_historical_pe * 1.3:
+                    advice.append(f"基於歷史平均本益比（{avg_historical_pe:.2f}），該股票當前價值可能被高估")
         # 基於技術指標的建議
         if data['current_price'] > data['ma50'] > data['ma200']:
             advice.append("技術形態呈現上升趨勢")
