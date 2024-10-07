@@ -3,12 +3,17 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import statistics
+import shelve
+import unittest
+
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, 
                             QPushButton, QTextEdit, QVBoxLayout, QWidget, 
                             QProgressBar, QComboBox, QListWidget, QMessageBox,
                             QTabWidget, QHBoxLayout, QGridLayout, QScrollArea,
-                            QFrame, QSizePolicy)
+                            QFrame, QSizePolicy,QDialog)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPalette, QColor, QIcon
 
@@ -135,7 +140,20 @@ class DataFetchThread(QThread):
         
         return historical_pe
 
+    def calculate_macd(self, prices, short=12, long=26, signal=9):
+        short_ema = prices.ewm(span=short, adjust=False).mean()
+        long_ema = prices.ewm(span=long, adjust=False).mean()
+        macd = short_ema - long_ema
+        signal_line = macd.ewm(span=signal, adjust=False).mean()
+        return macd, signal_line
 
+    def calculate_bollinger_bands(self, prices, window=20, num_std=2):
+
+        rolling_mean = prices.rolling(window=window).mean()
+        rolling_std = prices.rolling(window=window).std()
+        upper_band = rolling_mean + (rolling_std * num_std)
+        lower_band = rolling_mean - (rolling_std * num_std)
+        return upper_band, rolling_mean, lower_band
 class StockAnalyzerApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -504,9 +522,186 @@ class StockAnalyzerApp(QMainWindow):
         
         return "\n".join(analysis)
 
+    def analyze_cash_flow(self, ticker):
+        stock = yf.Ticker(ticker)
+        cash_flow = stock.cashflow
+        
+        operating_cash_flow = cash_flow.loc['Operating Cash Flow']
+        free_cash_flow = cash_flow.loc['Free Cash Flow']
+        
+        return {
+            'operating_cash_flow_growth': self.calculate_growth_rate(operating_cash_flow),
+            'free_cash_flow_growth': self.calculate_growth_rate(free_cash_flow),
+            'ocf_to_revenue_ratio': operating_cash_flow / stock.financials.loc['Total Revenue']
+        }
+
+    def export_to_pdf(self, data):
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+        
+        doc = SimpleDocTemplate("stock_analysis_report.pdf", pagesize=letter)
+        elements = []
+        
+        # 添加表格數據
+        table_data = [
+            ["指標", "數值"],
+            ["股票代碼", data['ticker']],
+            ["公司名稱", data['company_name']],
+            ["當前價格", f"${data['current_price']:.2f}"],
+            ["本益比", f"{data['pe_ratio']}"],
+            ["股息收益率", f"{data['dividend_yield']:.2%}"]
+        ]
+        
+        t = Table(table_data)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 14),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 12),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(t)
+        
+        doc.build(elements)
+
+    def create_stock_chart(self, data):
+
+        fig = make_subplots(rows=2, cols=1)
+        
+        # 添加股價和均線
+        fig.add_trace(go.Candlestick(
+            x=data['hist_data'].index,
+            open=data['hist_data']['Open'],
+            high=data['hist_data']['High'],
+            low=data['hist_data']['Low'],
+            close=data['hist_data']['Close'],
+            name="股價"
+        ), row=1, col=1)
+        
+        # 添加成交量
+        fig.add_trace(go.Bar(
+            x=data['hist_data'].index,
+            y=data['hist_data']['Volume'],
+            name="成交量"
+        ), row=2, col=1)
+        
+        return fig
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("分析設置")
+        
+        layout = QVBoxLayout(self)
+        
+        # RSI 設置
+        rsi_group = QGroupBox("RSI 設置")
+        rsi_layout = QVBoxLayout()
+        self.rsi_period = QSpinBox()
+        self.rsi_period.setValue(14)
+        rsi_layout.addWidget(QLabel("RSI 週期:"))
+        rsi_layout.addWidget(self.rsi_period)
+        rsi_group.setLayout(rsi_layout)
+        
+        # 均線設置
+        ma_group = QGroupBox("均線設置")
+        ma_layout = QVBoxLayout()
+        self.ma_short = QSpinBox()
+        self.ma_long = QSpinBox()
+        self.ma_short.setValue(50)
+        self.ma_long.setValue(200)
+        ma_layout.addWidget(QLabel("短期均線:"))
+        ma_layout.addWidget(self.ma_short)
+        ma_layout.addWidget(QLabel("長期均線:"))
+        ma_layout.addWidget(self.ma_long)
+        ma_group.setLayout(ma_layout)
+        
+        layout.addWidget(rsi_group)
+        layout.addWidget(ma_group)
+        
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+class DataCache:
+    def __init__(self, cache_file='stock_cache'):
+        self.cache_file = cache_file
+    
+    def get(self, key):
+        with shelve.open(self.cache_file) as db:
+            return db.get(key)
+    
+    def set(self, key, value, expiry=3600):  # 預設緩存1小時
+        with shelve.open(self.cache_file) as db:
+            db[key] = {
+                'data': value,
+                'expiry': datetime.now().timestamp() + expiry
+            }
+    
+    def is_valid(self, key):
+        cached = self.get(key)
+        if cached:
+            return datetime.now().timestamp() < cached['expiry']
+        return False
+class ParallelDataFetcher:
+    def __init__(self):
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+    
+    def fetch_multiple_stocks(self, tickers):
+        futures = []
+        for ticker in tickers:
+            future = self.executor.submit(self.fetch_single_stock, ticker)
+            futures.append(future)
+        
+        results = {}
+        for future, ticker in zip(futures, tickers):
+            try:
+                results[ticker] = future.result()
+            except Exception as e:
+                results[ticker] = None  # 或者其他方式處理錯誤
+                print(f"Error fetching {ticker}: {e}")
+        
+        return results
+    
+    def fetch_single_stock(self, ticker):
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="1y")
+        return hist
+class TestStockAnalyzer(unittest.TestCase):
+
+    def setUp(self):
+        self.app = QApplication([])
+        self.analyzer = StockAnalyzerApp()
+    
+    def test_rsi_calculation(self):
+        # 測試數據
+        test_prices = pd.Series([10, 12, 11, 13, 15, 14, 16])
+        rsi = self.analyzer.calculate_rsi(test_prices)
+        self.assertTrue(0 <= rsi.iloc[-1] <= 100)
+    
+    def test_invalid_ticker(self):
+        with self.assertRaises(ValueError):
+            self.analyzer.get_stock_data('INVALID_TICKER')
+    
+    def tearDown(self):
+        self.app.quit()
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # 使用Fusion風格以獲得更現代的外觀
+    app.setStyle('Fusion')
     window = StockAnalyzerApp()
     window.show()
     sys.exit(app.exec_())
+
+# 單元測試部分應獨立進行
+if __name__ == "__main__":
+    unittest.main()
