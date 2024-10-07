@@ -5,7 +5,7 @@ import numpy as np
 import statistics
 import shelve
 import unittest
-
+import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit,
                             QFrame, QSizePolicy,QDialog)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPalette, QColor, QIcon
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 class DataFetchThread(QThread):
     finished = pyqtSignal(object)
@@ -88,7 +89,8 @@ class DataFetchThread(QThread):
                 'ma200': hist_data['MA200'].iloc[-1],
                 'rsi': hist_data['RSI'].iloc[-1],
                 'industry_pe': industry_pe,
-                'historical_pe': historical_pe
+                'historical_pe': historical_pe,
+                'financials': financials
             }
 
         except Exception as e:
@@ -242,40 +244,54 @@ class StockAnalyzerApp(QMainWindow):
     def create_technical_tab(self):
         technical_tab = QWidget()
         technical_layout = QVBoxLayout(technical_tab)
-        
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
-        
-        self.technical_text = QTextEdit()
-        self.technical_text.setReadOnly(True)
-        scroll_layout.addWidget(self.technical_text)
-        
+
+        self.technical_view = QWebEngineView()  # 使用 QWebEngineView
+        scroll_layout.addWidget(self.technical_view)
+
         scroll.setWidget(scroll_content)
         technical_layout.addWidget(scroll)
-        
+
         self.tab_widget.addTab(technical_tab, "技術分析")
 
     def create_financial_tab(self):
-
         financial_tab = QWidget()
         financial_layout = QVBoxLayout(financial_tab)
-        
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
-        
-        self.financial_text = QTextEdit()
-        self.financial_text.setReadOnly(True)
-        scroll_layout.addWidget(self.financial_text)
-        
+
+        self.financial_view = QWebEngineView()  # Use QWebEngineView instead of QTextEdit
+        scroll_layout.addWidget(self.financial_view)
+
         scroll.setWidget(scroll_content)
         financial_layout.addWidget(scroll)
-        
+
         self.tab_widget.addTab(financial_tab, "財務分析")
 
+    def create_financial_charts(self, data):
+        # 創建營收和利潤增長圖表
+        revenue_profit_fig = px.bar(
+            data['financials'].T,  # 將財務數據轉置
+            x=data['financials'].T.index,  # 使用年份作為 x 軸
+            y=['Total Revenue', 'Net Income'],  # 顯示營收和利潤
+            title='營收和利潤增長趨勢'
+        )
+
+        # 創建資產負債結構圖表
+        # ... (程式碼待補)
+
+        # 創建盈利能力指標圖表
+        # ... (程式碼待補)
+
+        return [revenue_profit_fig]  # 返回包含所有圖表的列表
+    
     def style_ui(self):
         # 設置整體樣式
         self.setStyleSheet("""
@@ -412,22 +428,40 @@ class StockAnalyzerApp(QMainWindow):
         self.overview_text.setHtml(overview)
 
     def display_technical_analysis(self, data):
-        technical = f"""
-        <h2 style='color: #24292e;'>技術指標</h2>
-        <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;'>
-            <p><b>50日均線：</b> ${data['ma50']:.2f}</p>
-            <p><b>200日均線：</b> ${data['ma200']:.2f}</p>
-            <p><b>RSI(14)：</b> {data['rsi']:.2f}</p>
-        </div>
+        # 創建股票圖表
+        fig = self.create_stock_chart(data)  # 調用 create_stock_chart 函數
 
-        <h2 style='color: #24292e;'>技術分析</h2>
-        <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px;'>
-            {self.analyze_technical_indicators(data)}
-        </div>
-        """
-        self.technical_text.setHtml(technical)
+        # 將圖表轉換為 HTML 格式
+        html = fig.to_html(full_html=False, include_plotlyjs='cdn')
+        {html}
 
+        # 文字敘述方式
+        # 將圖表添加到 technical_text 中
+        # technical = f"""
+        # <h2 style='color: #24292e;'>技術指標</h2>
+        # <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;'>
+        #     <p><b>50日均線：</b> ${data['ma50']:.2f}</p>
+        #     <p><b>200日均線：</b> ${data['ma200']:.2f}</p>
+        #     <p><b>RSI(14)：</b> {data['rsi']:.2f}</p>
+        # </div>
+
+        # <h2 style='color: #24292e;'>技術分析</h2>
+        # <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px;'>
+        #     {self.analyze_technical_indicators(data)}
+        # </div>
+        #"""
+        self.technical_view.setHtml(html)
+        
     def display_financial_analysis(self, data):
+        # 創建財務圖表
+        financial_figs = self.create_financial_charts(data)
+
+        # 將圖表轉換為 HTML 格式
+        html = ""
+        for fig in financial_figs:
+            html += fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+        # 將圖表添加到 financial_text 中
         financial = f"""
         <h2 style='color: #24292e;'>財務指標</h2>
         <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;'>
@@ -442,24 +476,28 @@ class StockAnalyzerApp(QMainWindow):
         <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px;'>
             {self.analyze_financial_indicators(data)}
         </div>
+
+        {html}
         """
-        self.financial_text.setHtml(financial)
+        self.financial_view.setHtml(financial)
 
     def generate_investment_advice(self, data):
         advice = []
-        
-        #需要修改
-        if data['pe_ratio'] != "N/A" and isinstance(data['pe_ratio'], (int, float)):
+
+        if data['pe_ratio'] == "N/A":  # 首先判斷是否為 "N/A"
+            return "目前沒有明確的投資建議"
+
+        if isinstance(data['pe_ratio'], (int, float)):
             current_pe = data['pe_ratio']
             industry_pe = data['industry_pe']
             historical_pe = data['historical_pe']
-            
+
             # 與行業平均比較
             if current_pe < industry_pe * 0.7:
                 advice.append(f"基於行業平均本益比（{industry_pe:.2f}），該股票可能被低估")
             elif current_pe > industry_pe * 1.3:
                 advice.append(f"基於行業平均本益比（{industry_pe:.2f}），該股票可能被高估")
-            
+
             # 與自身歷史數據比較
             if historical_pe:
                 avg_historical_pe = statistics.mean(historical_pe)
@@ -467,18 +505,19 @@ class StockAnalyzerApp(QMainWindow):
                     advice.append(f"基於歷史平均本益比（{avg_historical_pe:.2f}），該股票當前價值可能被低估")
                 elif current_pe > avg_historical_pe * 1.3:
                     advice.append(f"基於歷史平均本益比（{avg_historical_pe:.2f}），該股票當前價值可能被高估")
+
         # 基於技術指標的建議
         if data['current_price'] > data['ma50'] > data['ma200']:
             advice.append("技術形態呈現上升趨勢")
         elif data['current_price'] < data['ma50'] < data['ma200']:
             advice.append("技術形態呈現下降趨勢")
-        
+
         # 基於RSI的建議
         if data['rsi'] > 70:
             advice.append("RSI顯示股票可能處於超買狀態")
         elif data['rsi'] < 30:
             advice.append("RSI顯示股票可能處於超賣狀態")
-        
+
         return "\n".join(advice) if advice else "目前沒有明確的投資建議"
 
     def analyze_technical_indicators(self, data):
