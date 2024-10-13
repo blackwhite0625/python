@@ -38,7 +38,19 @@ class DataFetchThread(QThread):
 
     def get_stock_data(self, ticker):
         stock = yf.Ticker(ticker)
-        
+        # 計算PEG比率
+        try:
+            peg_ratio = info.get('pegRatio', 'N/A')
+        except:
+            peg_ratio = 'N/A'
+
+        # 計算自由現金流收益率
+        try:
+            market_cap = info.get('marketCap', 0)
+            free_cash_flow = financials.loc['Free Cash Flow'].iloc[0]
+            fcf_yield = (free_cash_flow / market_cap) * 100 if market_cap != 0 else 'N/A'
+        except:
+            fcf_yield = 'N/A'
         try:
             # 基本數據獲取
             info = stock.info
@@ -51,6 +63,8 @@ class DataFetchThread(QThread):
             hist_data['MA50'] = hist_data['Close'].rolling(window=50).mean()
             hist_data['MA200'] = hist_data['Close'].rolling(window=200).mean()
             hist_data['RSI'] = self.calculate_rsi(hist_data['Close'])
+            hist_data['MACD'], hist_data['Signal_Line'] = self.calculate_macd(hist_data['Close'])
+            hist_data['Upper_BB'], hist_data['Middle_BB'], hist_data['Lower_BB'] = self.calculate_bollinger_bands(hist_data['Close'])
             
             # 獲取財務數據並進行同比增長計算
             financials = stock.financials
@@ -90,7 +104,9 @@ class DataFetchThread(QThread):
                 'rsi': hist_data['RSI'].iloc[-1],
                 'industry_pe': industry_pe,
                 'historical_pe': historical_pe,
-                'financials': financials
+                'financials': financials,
+                'peg_ratio': peg_ratio,
+                'fcf_yield': fcf_yield,
             }
 
         except Exception as e:
@@ -150,12 +166,37 @@ class DataFetchThread(QThread):
         return macd, signal_line
 
     def calculate_bollinger_bands(self, prices, window=20, num_std=2):
-
         rolling_mean = prices.rolling(window=window).mean()
         rolling_std = prices.rolling(window=window).std()
         upper_band = rolling_mean + (rolling_std * num_std)
         lower_band = rolling_mean - (rolling_std * num_std)
         return upper_band, rolling_mean, lower_band
+    
+    def calculate_macd(self, prices, short=12, long=26, signal=9):
+        short_ema = prices.ewm(span=short, adjust=False).mean()
+        long_ema = prices.ewm(span=long, adjust=False).mean()
+        macd = short_ema - long_ema
+        signal_line = macd.ewm(span=signal, adjust=False).mean()
+        return macd, signal_line
+
+    def calculate_bollinger_bands(self, prices, window=20, num_std=2):
+        rolling_mean = prices.rolling(window=window).mean()
+        rolling_std = prices.rolling(window=window).std()
+        upper_band = rolling_mean + (rolling_std * num_std)
+        lower_band = rolling_mean - (rolling_std * num_std)
+        return upper_band, rolling_mean, lower_band
+
+    def run_stock_filter(self):
+        criteria = {
+            'pe_ratio': 15,  # 例如：PE比率小於15
+            'dividend_yield': 0.02  # 例如：股息收益率大於2%
+        }
+        filtered_stocks = self.filter_stocks(criteria)
+        self.display_filtered_stocks(filtered_stocks)
+
+    def display_filtered_stocks(self, stocks):
+        # 實現這個方法來在UI中顯示篩選後的股票列表
+        pass
 class StockAnalyzerApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -276,21 +317,67 @@ class StockAnalyzerApp(QMainWindow):
         self.tab_widget.addTab(financial_tab, "財務分析")
 
     def create_financial_charts(self, data):
-        # 創建營收和利潤增長圖表
-        revenue_profit_fig = px.bar(
-            data['financials'].T,  # 將財務數據轉置
-            x=data['financials'].T.index,  # 使用年份作為 x 軸
-            y=['Total Revenue', 'Net Income'],  # 顯示營收和利潤
-            title='營收和利潤增長趨勢'
+        # 處理財務數據
+        financials = data['financials'].T
+        financials.index = financials.index.strftime('%Y-%m-%d')  # 格式化日期
+        financials = financials.sort_index()  # 確保日期順序正確
+
+        # 創建子圖
+        fig = make_subplots(rows=2, cols=2, subplot_titles=(
+            "營收和淨利潤趨勢", "利潤率趨勢", "資產負債結構", "現金流趨勢"
+        ))
+
+        # 檢查並添加圖表
+        missing_data = []
+
+        # 1. 營收和淨利潤趨勢
+        if 'Total Revenue' in financials.columns and 'Net Income' in financials.columns:
+            fig.add_trace(go.Bar(x=financials.index, y=financials['Total Revenue'], name="營收"), row=1, col=1)
+            fig.add_trace(go.Scatter(x=financials.index, y=financials['Net Income'], name="淨利潤", mode='lines+markers'), row=1, col=1)
+        else:
+            missing_data.append("營收和淨利潤")
+
+        # 2. 利潤率趨勢
+        if 'Gross Profit' in financials.columns and 'Total Revenue' in financials.columns:
+            gross_margin = (financials['Gross Profit'] / financials['Total Revenue']) * 100
+            net_margin = (financials['Net Income'] / financials['Total Revenue']) * 100
+            fig.add_trace(go.Scatter(x=financials.index, y=gross_margin, name="毛利率", mode='lines+markers'), row=1, col=2)
+            fig.add_trace(go.Scatter(x=financials.index, y=net_margin, name="淨利率", mode='lines+markers'), row=1, col=2)
+        else:
+            missing_data.append("利潤率")
+
+        # 3. 資產負債結構
+        if 'Total Assets' in financials.columns and 'Total Liabilities Net Minority Interest' in financials.columns:
+            fig.add_trace(go.Bar(x=financials.index, y=financials['Total Assets'], name="總資產"), row=2, col=1)
+            fig.add_trace(go.Bar(x=financials.index, y=financials['Total Liabilities Net Minority Interest'], name="總負債"), row=2, col=1)
+        else:
+            missing_data.append("資產負債結構")
+
+        # 4. 現金流趨勢
+        if 'Operating Cash Flow' in financials.columns and 'Free Cash Flow' in financials.columns:
+            fig.add_trace(go.Scatter(x=financials.index, y=financials['Operating Cash Flow'], name="營運現金流", mode='lines+markers'), row=2, col=2)
+            fig.add_trace(go.Scatter(x=financials.index, y=financials['Free Cash Flow'], name="自由現金流", mode='lines+markers'), row=2, col=2)
+        else:
+            missing_data.append("現金流")
+
+        # 更新佈局
+        fig.update_layout(
+            height=800, width=1200,
+            title_text="財務分析圖表",
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            font=dict(family="Arial", size=10),
+            margin=dict(l=50, r=50, t=80, b=50)
         )
 
-        # 創建資產負債結構圖表
-        # ... (程式碼待補)
+        # 更新x軸和y軸
+        fig.update_xaxes(tickangle=45, tickmode='auto', nticks=20)
+        fig.update_yaxes(title_text="金額 (美元)", row=1, col=1)
+        fig.update_yaxes(title_text="百分比 (%)", row=1, col=2)
+        fig.update_yaxes(title_text="金額 (美元)", row=2, col=1)
+        fig.update_yaxes(title_text="金額 (美元)", row=2, col=2)
 
-        # 創建盈利能力指標圖表
-        # ... (程式碼待補)
-
-        return [revenue_profit_fig]  # 返回包含所有圖表的列表
+        return fig, missing_data
     
     def style_ui(self):
         # 設置整體樣式
@@ -397,6 +484,15 @@ class StockAnalyzerApp(QMainWindow):
             dividend_yield = 0.0  # 如果是字符串，設置為 0
         else:
             dividend_yield = float(dividend_yield)  # 確保是浮點數
+            
+        # fcf_yield = data['fcf_yield']
+        # fcf_yield_str = f"{fcf_yield:.2f}%" if isinstance(fcf_yield, (float, int)) else fcf_yield
+        
+        fcf_yield = data.get('fcf_yield', 'N/A')
+        if isinstance(fcf_yield, (float, int)):
+            fcf_yield_str = f"{fcf_yield:.2f}%"
+        else:
+            fcf_yield_str = fcf_yield
 
         overview = f"""
         <h2 style='color: #24292e;'>公司概覽</h2>
@@ -424,6 +520,13 @@ class StockAnalyzerApp(QMainWindow):
         <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px;'>
             {self.generate_investment_advice(data)}
         </div>
+        
+        <h2 style='color: #24292e;'>進階指標</h2>
+        <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px;'>
+            <p><b>PEG比率：</b> {data['peg_ratio']}</p>
+            <p><b>自由現金流收益率：</b> {fcf_yield_str}</p>
+        </div>
+        
         """
         self.overview_text.setHtml(overview)
 
@@ -453,33 +556,39 @@ class StockAnalyzerApp(QMainWindow):
         self.technical_view.setHtml(html)
         
     def display_financial_analysis(self, data):
-        # 創建財務圖表
-        financial_figs = self.create_financial_charts(data)
-
+        financial_fig, missing_data = self.create_financial_charts(data)
+    
         # 將圖表轉換為 HTML 格式
-        html = ""
-        for fig in financial_figs:
-            html += fig.to_html(full_html=False, include_plotlyjs='cdn')
-
-        # 將圖表添加到 financial_text 中
-        financial = f"""
+        chart_html = financial_fig.to_html(full_html=False, include_plotlyjs='cdn')
+        
+        missing_data_html = ""
+        if missing_data:
+            missing_data_html = f"""
+            <div style='background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 6px; margin-bottom: 20px;'>
+                <p><strong>注意：</strong> 以下財務數據無法顯示：{', '.join(missing_data)}</p>
+            </div>
+            """
+        
+        financial_html = f"""
         <h2 style='color: #24292e;'>財務指標</h2>
         <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;'>
-            <p><b>營收增長率：</b> {data['revenue_growth']:.2f}%</p>
-            <p><b>利潤增長率：</b> {data['profit_growth']:.2f}%</p>
-            <p><b>流動比率：</b> {data['current_ratio']}</p>
-            <p><b>負債權益比：</b> {data['debt_to_equity']}</p>
-            <p><b>股東權益報酬率：</b> {data['return_on_equity']:.2%}</p>
+            <p><b>營收增長率：</b> {data.get('revenue_growth', 'N/A'):.2f}%</p>
+            <p><b>利潤增長率：</b> {data.get('profit_growth', 'N/A'):.2f}%</p>
+            <p><b>流動比率：</b> {data.get('current_ratio', 'N/A')}</p>
+            <p><b>負債權益比：</b> {data.get('debt_to_equity', 'N/A')}</p>
+            <p><b>股東權益報酬率：</b> {data.get('return_on_equity', 'N/A'):.2%}</p>
         </div>
+
+        {missing_data_html}
 
         <h2 style='color: #24292e;'>財務分析</h2>
         <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px;'>
             {self.analyze_financial_indicators(data)}
         </div>
 
-        {html}
+        {chart_html}
         """
-        self.financial_view.setHtml(financial)
+        self.financial_view.setHtml(financial_html)
 
     def generate_investment_advice(self, data):
         advice = []
@@ -611,10 +720,10 @@ class StockAnalyzerApp(QMainWindow):
         doc.build(elements)
 
     def create_stock_chart(self, data):
-
-        fig = make_subplots(rows=2, cols=1)
+        fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.02, 
+                            row_heights=[0.5, 0.2, 0.15, 0.15])
         
-        # 添加股價和均線
+        # 添加K線圖和均線
         fig.add_trace(go.Candlestick(
             x=data['hist_data'].index,
             open=data['hist_data']['Open'],
@@ -624,14 +733,39 @@ class StockAnalyzerApp(QMainWindow):
             name="股價"
         ), row=1, col=1)
         
+        fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['MA50'], name="MA50"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['MA200'], name="MA200"), row=1, col=1)
+        
         # 添加成交量
-        fig.add_trace(go.Bar(
-            x=data['hist_data'].index,
-            y=data['hist_data']['Volume'],
-            name="成交量"
-        ), row=2, col=1)
+        fig.add_trace(go.Bar(x=data['hist_data'].index, y=data['hist_data']['Volume'], name="成交量"), row=2, col=1)
+        
+        # 添加MACD
+        fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['MACD'], name="MACD"), row=3, col=1)
+        fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['Signal_Line'], name="Signal Line"), row=3, col=1)
+        
+        # 添加布林通道
+        fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['Upper_BB'], name="Upper BB", line=dict(dash='dash')), row=4, col=1)
+        fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['Middle_BB'], name="Middle BB"), row=4, col=1)
+        fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['Lower_BB'], name="Lower BB", line=dict(dash='dash')), row=4, col=1)
+        
+        fig.update_layout(height=800, title_text="股票技術分析圖表")
+        fig.update_xaxes(rangeslider_visible=False)
         
         return fig
+    
+    def filter_stocks(self, criteria):
+        filtered_stocks = []
+        for ticker in self.all_stocks:  # 假設您有一個包含所有股票的列表
+            stock_data = self.get_stock_data(ticker)
+            if self.meets_criteria(stock_data, criteria):
+                filtered_stocks.append(ticker)
+        return filtered_stocks
+
+    def meets_criteria(self, stock_data, criteria):
+        for key, value in criteria.items():
+            if key not in stock_data or stock_data[key] < value:
+                return False
+        return True
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
