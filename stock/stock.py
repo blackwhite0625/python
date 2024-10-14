@@ -7,6 +7,8 @@ import shelve
 import unittest
 import plotly.express as px
 import plotly.graph_objs as go
+import logging
+from PyQt5.QtCore import QTimer
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, 
@@ -17,7 +19,11 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit,
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPalette, QColor, QIcon
 from PyQt5.QtWebEngineWidgets import QWebEngineView
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
+#數據抓取
 class DataFetchThread(QThread):
     finished = pyqtSignal(object)
     error = pyqtSignal(str)
@@ -197,11 +203,21 @@ class DataFetchThread(QThread):
     def display_filtered_stocks(self, stocks):
         # 實現這個方法來在UI中顯示篩選後的股票列表
         pass
+
+#主應用程序類，處理 UI 和主要邏輯
 class StockAnalyzerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.init_ui()
-
+        self.stock_filter = StockFilter()
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self.update_data)
+        self.update_timer.start(300000)  # 每5分鐘更新一次
+        
+    def update_data(self):
+        if hasattr(self, 'current_ticker') and self.current_ticker:
+            self.start_analysis()
+               
     def init_ui(self):
         self.setWindowIcon(QIcon("C:\progarming\github\Python\python\stock\icon.ico"))
 
@@ -454,15 +470,16 @@ class StockAnalyzerApp(QMainWindow):
         if not ticker:
             QMessageBox.warning(self, "錯誤", "請輸入股票代號")
             return
-        
-        self.progress_bar.setValue(0)
-        self.analyze_button.setEnabled(False)
-        
-        self.thread = DataFetchThread(ticker)
-        self.thread.finished.connect(self.handle_analysis_result)
-        self.thread.error.connect(self.handle_analysis_error)
-        self.thread.progress.connect(self.progress_bar.setValue)
-        self.thread.start()
+        logging.basicConfig(filename='stock_analyzer.log', level=logging.ERROR)
+        try:
+            # 原有的數據獲取代碼
+            self.thread = DataFetchThread(ticker)
+            self.thread.finished.connect(self.handle_analysis_result)
+            self.thread.error.connect(self.handle_analysis_error)
+            self.thread.start()
+        except Exception as e:
+            logging.exception(f"分析過程中發生錯誤: {e}")
+            QMessageBox.critical(self, "錯誤", f"分析過程中發生錯誤: {e}")
 
     def handle_analysis_result(self, data):
         self.display_overview(data)
@@ -766,6 +783,32 @@ class StockAnalyzerApp(QMainWindow):
             if key not in stock_data or stock_data[key] < value:
                 return False
         return True
+
+    def export_to_excel(self, data):
+        df = pd.DataFrame(data)
+        df.to_excel('stock_analysis.xlsx', index=False)
+
+    def export_to_pdf(self, data):
+        doc = SimpleDocTemplate("stock_analysis.pdf", pagesize=letter)
+        elements = []
+        # 將數據轉換為表格格式
+        t = Table(data)
+        t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke)]))
+        elements.append(t)
+        doc.build(elements)
+
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(name='Operating Cash Flow', x=data['Date'], y=data['Operating Cash Flow'], mode='lines', line=dict(color='blue')))
+        fig.add_trace(go.Scatter(name='Investing Cash Flow', x=data['Date'], y=data['Investing Cash Flow'], mode='lines', line=dict(color='red')))
+        fig.add_trace(go.Scatter(name='Financing Cash Flow', x=data['Date'], y=data['Financing Cash Flow'], mode='lines', line=dict(color='green')))
+
+        fig.update_layout(title='Cash Flow Trend Over Time',
+                        xaxis_title='Date', yaxis_title='Cash Flow')
+        fig.show()
+        
+#設定對話框
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -804,6 +847,8 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+#數據緩存
 class DataCache:
     def __init__(self, cache_file='stock_cache'):
         self.cache_file = cache_file
@@ -824,6 +869,8 @@ class DataCache:
         if cached:
             return datetime.now().timestamp() < cached['expiry']
         return False
+    
+#並行數據獲取
 class ParallelDataFetcher:
     def __init__(self):
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
@@ -848,6 +895,8 @@ class ParallelDataFetcher:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1y")
         return hist
+
+#單元測試
 class TestStockAnalyzer(unittest.TestCase):
 
     def setUp(self):
@@ -867,7 +916,49 @@ class TestStockAnalyzer(unittest.TestCase):
     def tearDown(self):
         self.app.quit()
 
+#股票篩選功能
+class StockFilter:
+    def __init__(self):
+        self.criteria = {}
 
+    def add_criterion(self, name, operator, value):
+        self.criteria[name] = (operator, value)
+
+    def filter_stocks(self, stocks):
+        return [stock for stock in stocks if self.meets_criteria(stock)]
+
+    def meets_criteria(self, stock):
+        for name, (operator, value) in self.criteria.items():
+            if operator == '>' and stock[name] <= value:
+                   return False
+            elif operator == '<' and stock[name] >= value:
+                   return False
+               # 添加更多操作符...
+        return True
+
+#用戶自定義指標
+class CustomIndicator:
+    def __init__(self, name, formula):
+        self.name = name
+        self.formula = formula
+
+    def calculate(self, data):
+        # 使用 eval 或更安全的方法來執行公式
+        return eval(self.formula, {"data": data})
+
+class IndicatorManager:
+    def __init__(self):
+        self.indicators = {}
+
+    def add_indicator(self, name, formula):
+        self.indicators[name] = CustomIndicator(name, formula)
+
+    def calculate_indicator(self, name, data):
+        if name in self.indicators:
+            return self.indicators[name].calculate(data)
+        else:
+            raise ValueError(f"指標 {name} 不存在")
+        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
