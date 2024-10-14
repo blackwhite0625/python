@@ -349,8 +349,7 @@ class StockAnalyzerApp(QMainWindow):
         # 1. 營收和淨利潤趨勢
         if 'Total Revenue' in financials.columns and 'Net Income' in financials.columns:
             fig.add_trace(go.Bar(x=financials.index, y=financials['Total Revenue'], name="營收"), row=1, col=1)
-            fig.add_trace(go.Scatter(x=financials.index, y=financials['Net Income'], name="淨利潤", mode='lines+markers'), row=1, col=1)
-        else:
+            fig.add_trace(go.Scatter(x=financials.index, y=financials['Net Income'], name="淨利潤", mode='lines+markers'), row=1, col=1)        else:
             missing_data.append("營收和淨利潤")
 
         # 2. 利潤率趨勢
@@ -969,3 +968,4 @@ if __name__ == "__main__":
 # 單元測試部分應獨立進行
 if __name__ == "__main__":
     unittest.main()
+
