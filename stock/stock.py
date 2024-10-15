@@ -349,7 +349,8 @@ class StockAnalyzerApp(QMainWindow):
         # 1. 營收和淨利潤趨勢
         if 'Total Revenue' in financials.columns and 'Net Income' in financials.columns:
             fig.add_trace(go.Bar(x=financials.index, y=financials['Total Revenue'], name="營收"), row=1, col=1)
-            fig.add_trace(go.Scatter(x=financials.index, y=financials['Net Income'], name="淨利潤", mode='lines+markers'), row=1, col=1)        else:
+            fig.add_trace(go.Scatter(x=financials.index, y=financials['Net Income'], name="淨利潤", mode='lines+markers'), row=1, col=1)
+        else:
             missing_data.append("營收和淨利潤")
 
         # 2. 利潤率趨勢
@@ -393,6 +394,31 @@ class StockAnalyzerApp(QMainWindow):
         fig.update_yaxes(title_text="金額 (美元)", row=2, col=2)
 
         return fig, missing_data
+
+    def create_overview_charts(self, data):
+        # 創建子圖
+        fig = make_subplots(rows=2, cols=2, subplot_titles=(
+            "股價趨勢", "成交量", "本益比趨勢", "股息收益率趨勢"
+        ))
+        
+        # 1. 股價趨勢
+        fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['Close'], name="股價"), row=1, col=1)
+        
+        # 2. 成交量
+        fig.add_trace(go.Bar(x=data['hist_data'].index, y=data['hist_data']['Volume'], name="成交量"), row=1, col=2)
+        
+        # 3. 本益比趨勢（如果有數據的話）
+        if 'pe_ratio' in data['hist_data'].columns:
+            fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['pe_ratio'], name="本益比"), row=2, col=1)
+        
+        # 4. 股息收益率趨勢（如果有數據的話）
+        if 'dividend_yield' in data['hist_data'].columns:
+            fig.add_trace(go.Scatter(x=data['hist_data'].index, y=data['hist_data']['dividend_yield'], name="股息收益率"), row=2, col=2)
+        
+        # 更新佈局
+        fig.update_layout(height=800, width=1200, title_text="市場概覽圖表")
+        
+        return fig
     
     def style_ui(self):
         # 設置整體樣式
@@ -509,8 +535,13 @@ class StockAnalyzerApp(QMainWindow):
             fcf_yield_str = f"{fcf_yield:.2f}%"
         else:
             fcf_yield_str = fcf_yield
-
+            
+        overview_fig = self.create_overview_charts(data)
+        overview_chart_html = overview_fig.to_html(full_html=False, include_plotlyjs='cdn')
+        
         overview = f"""
+        <h2 style='color: #24292e;'>市場概覽圖表</h2>
+        
         <h2 style='color: #24292e;'>公司概覽</h2>
         <div style='background-color: #f6f8fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;'>
             <p><b>公司名稱：</b> {data['company_name']}</p>
@@ -542,7 +573,7 @@ class StockAnalyzerApp(QMainWindow):
             <p><b>PEG比率：</b> {data['peg_ratio']}</p>
             <p><b>自由現金流收益率：</b> {fcf_yield_str}</p>
         </div>
-        
+        {overview_chart_html}
         """
         self.overview_text.setHtml(overview)
 
