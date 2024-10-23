@@ -8,6 +8,8 @@ import unittest
 import plotly.express as px
 import plotly.graph_objs as go
 import logging
+import feedparser
+from datetime import datetime, timedelta
 from PyQt5.QtCore import QTimer
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
@@ -22,6 +24,7 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+
 
 #數據抓取
 class DataFetchThread(QThread):
@@ -44,6 +47,9 @@ class DataFetchThread(QThread):
 
     def get_stock_data(self, ticker):
         stock = yf.Ticker(ticker)
+        industry_pe = self.get_industry_average_pe(ticker)
+        if industry_pe is None:
+            industry_pe = "N/A"
         # 計算PEG比率
         try:
             peg_ratio = info.get('pegRatio', 'N/A')
@@ -213,6 +219,7 @@ class StockAnalyzerApp(QMainWindow):
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.update_data)
         self.update_timer.start(300000)  # 每5分鐘更新一次
+        self.init_portfolio_manager()
         
     def update_data(self):
         if hasattr(self, 'current_ticker') and self.current_ticker:
@@ -837,7 +844,184 @@ class StockAnalyzerApp(QMainWindow):
         fig.update_layout(title='Cash Flow Trend Over Time',
                         xaxis_title='Date', yaxis_title='Cash Flow')
         fig.show()
+
+    def init_portfolio_manager(self):
+        self.portfolio_manager = PortfolioManager()
+        self.news_integrator = NewsIntegrator()
+
+        # 創建投資組合管理標籤頁
+        portfolio_tab = QWidget()
+        portfolio_layout = QVBoxLayout(portfolio_tab)
+
+        # 添加創建投資組合的控件
+        create_portfolio_layout = QHBoxLayout()
+        self.portfolio_name_input = QLineEdit()
+        create_portfolio_button = QPushButton("創建投資組合")
+        create_portfolio_button.clicked.connect(self.create_portfolio)
+        create_portfolio_layout.addWidget(self.portfolio_name_input)
+        create_portfolio_layout.addWidget(create_portfolio_button)
+        portfolio_layout.addLayout(create_portfolio_layout)
+
+        # 添加投資組合列表
+        self.portfolio_list = QListWidget()
+        self.portfolio_list.itemClicked.connect(self.show_portfolio_details)
+        portfolio_layout.addWidget(self.portfolio_list)
+
+        # 添加投資組合詳情區域
+        self.portfolio_details = QTextEdit()
+        self.portfolio_details.setReadOnly(True)
+        portfolio_layout.addWidget(self.portfolio_details)
+
+        self.tab_widget.addTab(portfolio_tab, "投資組合")
+
+        # 創建新聞標籤頁
+        news_tab = QWidget()
+        news_layout = QVBoxLayout(news_tab)
+
+        # 添加新聞源選擇下拉框
+        self.news_source_combo = QComboBox()
+        self.news_source_combo.addItems(self.news_integrator.news_feeds.keys())
+        news_layout.addWidget(self.news_source_combo)
+
+        # 添加獲取新聞按鈕
+        get_news_button = QPushButton("獲取新聞")
+        get_news_button.clicked.connect(self.fetch_news)
+        news_layout.addWidget(get_news_button)
+
+        # 添加新聞顯示區域
+        self.news_display = QTextEdit()
+        self.news_display.setReadOnly(True)
+        news_layout.addWidget(self.news_display)
+
+        self.tab_widget.addTab(news_tab, "新聞")
+
+    def create_portfolio(self):
+        name = self.portfolio_name_input.text()
+        try:
+            self.portfolio_manager.create_portfolio(name)
+            self.portfolio_list.addItem(name)
+            self.portfolio_name_input.clear()
+        except ValueError as e:
+            QMessageBox.warning(self, "錯誤", str(e))
+
+    def show_portfolio_details(self, item):
+        portfolio = self.portfolio_manager.get_portfolio(item.text())
+        if portfolio:
+            details = f"投資組合: {portfolio.name}\n"
+            details += f"總價值: ${portfolio.get_value():.2f}\n\n"
+            details += "持股:\n"
+            for ticker, quantity in portfolio.holdings.items():
+                stock = yf.Ticker(ticker)
+                current_price = stock.info['regularMarketPrice']
+                value = current_price * quantity
+                details += f"{ticker}: {quantity} 股, 價值: ${value:.2f}\n"
+            self.portfolio_details.setText(details)
+
+    def fetch_news(self):
+        source = self.news_source_combo.currentText()
+        try:
+            news = self.news_integrator.get_news(source)
+            news_text = ""
+            for entry in news:
+                news_text += f"標題: {entry.title}\n"
+                news_text += f"發布時間: {entry.published}\n"
+                news_text += f"鏈接: {entry.link}\n\n"
+            self.news_display.setText(news_text)
+        except ValueError as e:
+            QMessageBox.warning(self, "錯誤", str(e))
+
+    def generate_investment_advice(self, data):
+        advice = []
+
+        # 基本面分析
+        if data['pe_ratio'] != "N/A" and isinstance(data['pe_ratio'], (int, float)):
+            if data['pe_ratio'] < data['industry_pe'] * 0.7:
+                advice.append("基於行業平均本益比,該股票可能被低估")
+            elif data['pe_ratio'] > data['industry_pe'] * 1.3:
+                advice.append("基於行業平均本益比,該股票可能被高估")
         
+        if data['pb_ratio'] != "N/A" and isinstance(data['pb_ratio'], (int, float)):
+            if data['pb_ratio'] < 1:
+                advice.append("股價淨值比低於1,可能表示股票被低估")
+            elif data['pb_ratio'] > 3:
+                advice.append("股價淨值比較高,需謹慎評估")
+
+        # 股息分析
+        if data['dividend_yield'] != "N/A" and isinstance(data['dividend_yield'], (int, float)):
+            if data['dividend_yield'] > 0.04:
+                advice.append("股息收益率較高,可能適合收入型投資者")
+            elif data['dividend_yield'] < 0.01:
+                advice.append("股息收益率較低,可能不適合尋求穩定收入的投資者")
+
+        # 成長性分析
+        if data['revenue_growth'] > 20:
+            advice.append("營收增長強勁,公司可能處於高速成長期")
+        elif data['revenue_growth'] < 0:
+            advice.append("營收出現下滑,需要關注公司基本面變化")
+
+        # 財務健康度分析
+        if data['debt_to_equity'] != "N/A" and isinstance(data['debt_to_equity'], (int, float)):
+            if data['debt_to_equity'] > 2:
+                advice.append("負債權益比較高,公司財務風險可能較大")
+            elif data['debt_to_equity'] < 0.5:
+                advice.append("負債權益比較低,公司財務狀況相對穩健")
+
+        # 技術面分析
+        if data['current_price'] > data['ma50'] > data['ma200']:
+            advice.append("股價位於50日和200日均線之上,短期技術形態偏強")
+        elif data['current_price'] < data['ma50'] < data['ma200']:
+            advice.append("股價位於50日和200日均線之下,短期技術形態偏弱")
+
+        if data['rsi'] > 70:
+            advice.append("RSI處於超買區間,短期可能面臨回調風險")
+        elif data['rsi'] < 30:
+            advice.append("RSI處於超賣區間,可能存在反彈機會")
+
+        # 綜合建議
+        if len(advice) == 0:
+            return "目前沒有明確的投資建議,建議進行更深入的研究"
+        elif len(advice) <= 2:
+            return "初步分析建議:\n" + "\n".join(advice) + "\n建議結合更多因素進行綜合判斷"
+        else:
+            return "投資建議:\n" + "\n".join(advice) + "\n請注意,這些建議僅供參考,實際投資決策需要考慮更多因素"
+
+    def get_industry_average_pe(self, ticker):
+        try:
+            stock = yf.Ticker(ticker)
+            industry = stock.info['industry']
+            sector = stock.info['sector']
+            
+            # 獲取同行業的主要公司
+            peers = stock.info.get('recommendationKey', [])
+            if not peers:
+                # 如果無法獲取推薦的同行,可以使用行業ETF作為替代
+                industry_etfs = {
+                    "Technology": "XLK",
+                    "Healthcare": "XLV",
+                    "Financials": "XLF",
+                    "Consumer Discretionary": "XLY",
+                    "Industrials": "XLI",
+                    # 添加更多行業ETF...
+                }
+                etf_ticker = industry_etfs.get(sector, "SPY")  # 如果找不到對應的ETF,使用S&P 500 ETF
+                peers = yf.Ticker(etf_ticker).info.get('holdings', [])[:10]  # 獲取ETF前10大持股
+            
+            pe_ratios = []
+            for peer in peers:
+                peer_stock = yf.Ticker(peer)
+                pe = peer_stock.info.get('trailingPE')
+                if pe and isinstance(pe, (int, float)) and pe > 0:
+                    pe_ratios.append(pe)
+            
+            if pe_ratios:
+                avg_pe = sum(pe_ratios) / len(pe_ratios)
+                return avg_pe
+            else:
+                return None
+        except Exception as e:
+            print(f"獲取行業平均本益比時出錯: {e}")
+            return None
+
 #設定對話框
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
@@ -988,7 +1172,78 @@ class IndicatorManager:
             return self.indicators[name].calculate(data)
         else:
             raise ValueError(f"指標 {name} 不存在")
-        
+
+class Portfolio:
+    def __init__(self, name):
+        self.name = name
+        self.holdings = {}  # 股票代碼: 持股數量
+        self.transactions = []
+
+    def add_stock(self, ticker, quantity):
+        if ticker in self.holdings:
+            self.holdings[ticker] += quantity
+        else:
+            self.holdings[ticker] = quantity
+        self.transactions.append(("買入", ticker, quantity, datetime.now()))
+
+    def remove_stock(self, ticker, quantity):
+        if ticker in self.holdings:
+            if self.holdings[ticker] >= quantity:
+                self.holdings[ticker] -= quantity
+                if self.holdings[ticker] == 0:
+                    del self.holdings[ticker]
+                self.transactions.append(("賣出", ticker, quantity, datetime.now()))
+            else:
+                raise ValueError("賣出數量超過持有數量")
+        else:
+            raise ValueError("投資組合中沒有此股票")
+
+    def get_value(self):
+        total_value = 0
+        for ticker, quantity in self.holdings.items():
+            stock = yf.Ticker(ticker)
+            current_price = stock.info['regularMarketPrice']
+            total_value += current_price * quantity
+        return total_value
+
+class PortfolioManager:
+    def __init__(self):
+        self.portfolios = {}
+
+    def create_portfolio(self, name):
+        if name not in self.portfolios:
+            self.portfolios[name] = Portfolio(name)
+        else:
+            raise ValueError("投資組合名稱已存在")
+
+    def delete_portfolio(self, name):
+        if name in self.portfolios:
+            del self.portfolios[name]
+        else:
+            raise ValueError("投資組合不存在")
+
+    def get_portfolio(self, name):
+        return self.portfolios.get(name)
+
+class NewsIntegrator:
+    def __init__(self):
+        self.news_feeds = {
+            "財經新聞": "http://finance.yahoo.com/rss/topstories",
+            "市場動態": "http://feeds.marketwatch.com/marketwatch/topstories/"
+        }
+
+    def get_news(self, feed_name, max_entries=10):
+        if feed_name in self.news_feeds:
+            feed = feedparser.parse(self.news_feeds[feed_name])
+            return feed.entries[:max_entries]
+        else:
+            raise ValueError("無效的新聞源名稱")
+
+    def get_stock_news(self, ticker, max_entries=10):
+        stock_feed = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
+        feed = feedparser.parse(stock_feed)
+        return feed.entries[:max_entries]
+    
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
