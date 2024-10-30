@@ -31,7 +31,6 @@ class DataFetchThread(QThread):
     finished = pyqtSignal(object)
     error = pyqtSignal(str)
     progress = pyqtSignal(int)
-    print("test")
     def __init__(self, ticker):
         super().__init__()
         self.ticker = ticker
@@ -658,6 +657,7 @@ class StockAnalyzerApp(QMainWindow):
             # 與行業平均比較
             if current_pe < industry_pe * 0.7:
                 advice.append(f"基於行業平均本益比（{industry_pe:.2f}），該股票可能被低估")
+                
             elif current_pe > industry_pe * 1.3:
                 advice.append(f"基於行業平均本益比（{industry_pe:.2f}），該股票可能被高估")
 
