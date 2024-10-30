@@ -31,7 +31,7 @@ class DataFetchThread(QThread):
     finished = pyqtSignal(object)
     error = pyqtSignal(str)
     progress = pyqtSignal(int)
-
+    print("test")
     def __init__(self, ticker):
         super().__init__()
         self.ticker = ticker
