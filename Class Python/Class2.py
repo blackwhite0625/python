@@ -51,17 +51,61 @@ def textf():
         print(e)
     for f in range(2,5):
         print(f)
-    
-    # 九九乘法表
-    for i in range(1, 10):  
-        for j in range(1, i + 1):  
-            print(f"{j} x {i} = {i * j:2}", end="  ") 
-        print()  
-
     # **行數
     rows = int(input("請輸入需要的行數: "))
     for i in range(1, rows + 1): 
         print("*" * i)  
 
-        
-textf()
+# *三角形
+def forrange():
+    a = int(input("請輸入需要的行數: "))
+    for x in range(1,a):
+        for j in range(1, a-x+1): 
+            print("" ,end=" ")  
+        for j in range(1, x+1): 
+            print(" *" ,end="") 
+        print()
+    print()
+def forrange1():
+    rows = int(input("請輸入需要的行數: "))
+    for j in range(1, rows + 1):  
+        spaces = rows - j
+        print(" " * spaces + " *" * j) 
+    print()
+
+def forrange2():
+    for x in range(1,12):
+        for y in range(1,11-x+1):
+            print(" ",end="")
+        for y in range(1,2*x-1+1):
+            print("*",end="")
+        print()
+    print()
+
+
+
+# 九九乘法表
+def ninix():
+    for i in range(1, 10):  
+        for j in range(1, i + 1):  
+            print(f"{j} x {i} = {i * j:2}", end="  ") 
+        print()  
+def ninix1():
+    for i in range(10):
+        if(i <= 0):
+            continue
+        j = 1
+        while 1:
+            print(i,"*",j,"=",i*j,end="\t")
+            j = j + 1
+            if(j > 9):
+                break
+        print()
+
+def list1():
+    lis1 = [1,2,"shit"]
+    print(lis1[1:3])
+    
+    for i in lis1:
+        print(i)
+list1()
