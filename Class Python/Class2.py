@@ -1,5 +1,6 @@
 #考試
 import random
+import random as R
 def nrange():
     for n in range(1,8,2):
         print(n,end='')
@@ -90,6 +91,7 @@ def ninix():
         for j in range(1, i + 1):  
             print(f"{j} x {i} = {i * j:2}", end="  ") 
         print()  
+
 def ninix1():
     for i in range(10):
         if(i <= 0):
@@ -108,4 +110,89 @@ def list1():
     
     for i in lis1:
         print(i)
-list1()
+
+
+def list2():
+    a = ["MAN","GIRL","JACK"]
+    b = [90,78,89]
+
+    zipped = zip(a,b)
+    print(zipped)
+    zipped_sort = sorted(zipped,key=lambda x:x[1],reverse=True)
+    print(zipped_sort)
+    print(*zipped_sort)
+    a1,b1 = (list(t) for t in zip (*zipped_sort))
+    print(a1)
+    print(b1)
+
+def list3():
+    lst = [[4,8,5,9],[13,16,19,15],[28,25,29,24]]
+    print(lst)
+    n1 = len(lst)
+    print(lst[1])
+    n2 = len(lst[1])
+    print(lst[1][2])
+
+def list4():
+    a = [1,2,3]
+    b = a
+    c = a[:]
+    d = a[::-1]
+    print(a,b,c,d,sep="\n")
+    a[0]=4
+    print(a,b,c,d,sep="\n")
+
+def list5():
+    lst = [[4,8,5,9],[13,16,19,15],[28,25,29,24]]
+    print("lst = ",end=" ")
+    print(lst)
+    for i in range(len(lst)):
+        print()
+        for j in range(len(lst[i])):
+            print(f"lst{[i]}{[j]} = {lst[i][j]:2d}",end=" ")
+
+def list6():
+    A = [0 for x in range(2)]
+    print(A)
+    arr = [A for Y in range(4)]
+    print(arr)
+
+
+def scorelist():
+    no = [1,2,3,4]
+    score = [[87,64,88],[93,72,86],[80,88,89],[79,91,90]]  
+    print("編號 語文 數理 智力 總分")
+    print("=========================")
+    for i in range(len(no)):
+        print(f"{no[i]:2d}",end="   ")
+        hSum = 0
+        for j in range(len(score[i])):
+            print(f"{score[i][j]:3d}",end="  ")  
+            hSum += score[i][j]
+        print(f"{hSum:3d}")
+        
+    print("平均",end=" ")
+    for j in range(3):
+        vSum = 0
+        for i in range(len(no)):
+            vSum += score[i][j]
+        print(f"{vSum/len(no):4.1f}",end="  ")
+     
+def randint2():
+    max = 35
+    min = 18
+    num = 6
+    arr = [0 for x in range(num)]
+    n = 0
+    while (n < num):
+        isRepeat = False
+        rnd = R.randint(min,max)
+        for v in arr:
+            if rnd == v:
+                isRepeat = True
+        if not isRepeat:
+            arr[n] = rnd
+            n += 1
+    for i in range(num):
+        print(f"第{i+1}個亂數:{arr[i]}")
+randint2()
