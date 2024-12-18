@@ -1,6 +1,7 @@
 #考試
 import random
 import random as R
+import os
 def nrange():
     for n in range(1,8,2):
         print(n,end='')
@@ -195,4 +196,31 @@ def randint2():
             n += 1
     for i in range(num):
         print(f"第{i+1}個亂數:{arr[i]}")
-randint2()
+
+def openfilee():
+    fName="class.txt"
+    if os.path.isfile(fName):
+        fr=open(fName,"r")
+        flist = fr.readlines()
+        for i in flist:
+            print(i.strip())
+        fr.close()
+    else:
+        print(fName,"不存在")
+
+    fa = open(fName,"a")
+    fa.write("\n共偉文,87,87")
+    fa.write("\n周瑜安,23,43")
+    fa.flush()
+    fa.close()
+    
+    # if os.path.isfile(fName):
+    #     fr=open(fName,"r")
+    #     flist=fr.readlines()
+    #     for i in flist:
+    #         print(i.strip())
+    #     fr.close()
+    # else:
+    #     print(fName,"不存在")
+openfilee()
+            
