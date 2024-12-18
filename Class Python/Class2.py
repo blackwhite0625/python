@@ -214,13 +214,12 @@ def openfilee():
     fa.flush()
     fa.close()
     
-    # if os.path.isfile(fName):
-    #     fr=open(fName,"r")
-    #     flist=fr.readlines()
-    #     for i in flist:
-    #         print(i.strip())
-    #     fr.close()
-    # else:
-    #     print(fName,"不存在")
-openfilee()
-            
+    if os.path.isfile(fName):
+        fr=open(fName,"r")
+        flist=fr.readlines()
+        for i in flist:
+            print(i.strip())
+        fr.close()
+    else:
+        print(fName,"不存在")
+           
