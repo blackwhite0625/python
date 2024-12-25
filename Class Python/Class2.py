@@ -2,12 +2,19 @@
 import random
 import random as R
 import os
+
 def nrange():
+    """
+    輸出從 1 開始到 7（不含）之間的所有奇數，並列印最終的 n 值。
+    """
     for n in range(1,8,2):
         print(n,end='')
     print("n=",n)
 
 def ran():
+    """
+    產生三個隨機數，計算其和，並判斷是否大於 12 進行不同的輸出。
+    """
     a = random.randint(1,6)
     b = random.randint(1,6)
     c = random.randint(1,6)
@@ -19,6 +26,9 @@ def ran():
 
 #剪刀石頭布
 def rock():
+    """
+    實現一個簡單的剪刀石頭布遊戲，玩家與電腦進行對戰。
+    """
     while True:
         #剪刀1 石頭2 布3
         randoms = ["1","2","3"]
@@ -39,8 +49,10 @@ def rock():
         else:
             continue
 
-
 def textf():
+    """
+    示範字串查找、轉換大小寫以及輸出星號圖形。
+    """
     a = "aiopopu"
     b= a.find("io")
     print(b)
@@ -60,6 +72,9 @@ def textf():
 
 # *三角形
 def forrange():
+    """
+    輸出倒金字塔形的星號圖案。
+    """
     a = int(input("請輸入需要的行數: "))
     for x in range(1,a):
         for j in range(1, a-x+1): 
@@ -69,6 +84,9 @@ def forrange():
         print()
     print()
 def forrange1():
+    """
+    輸出標準金字塔形的星號圖案。
+    """
     rows = int(input("請輸入需要的行數: "))
     for j in range(1, rows + 1):  
         spaces = rows - j
@@ -76,6 +94,9 @@ def forrange1():
     print()
 
 def forrange2():
+    """
+    輸出完整金字塔的星號圖案。
+    """
     for x in range(1,12):
         for y in range(1,11-x+1):
             print(" ",end="")
@@ -84,16 +105,20 @@ def forrange2():
         print()
     print()
 
-
-
 # 九九乘法表
 def ninix():
+    """
+    輸出格式化的九九乘法表。
+    """
     for i in range(1, 10):  
         for j in range(1, i + 1):  
             print(f"{j} x {i} = {i * j:2}", end="  ") 
         print()  
 
 def ninix1():
+    """
+    使用 while 循環輸出九九乘法表。
+    """
     for i in range(10):
         if(i <= 0):
             continue
@@ -106,14 +131,19 @@ def ninix1():
         print()
 
 def list1():
+    """
+    示範列表的切片操作與遍歷。
+    """
     lis1 = [1,2,"shit"]
     print(lis1[1:3])
     
     for i in lis1:
         print(i)
 
-
 def list2():
+    """
+    示範列表排序及解壓縮操作。
+    """
     a = ["MAN","GIRL","JACK"]
     b = [90,78,89]
 
@@ -127,6 +157,9 @@ def list2():
     print(b1)
 
 def list3():
+    """
+    操作與輸出多維列表。
+    """
     lst = [[4,8,5,9],[13,16,19,15],[28,25,29,24]]
     print(lst)
     n1 = len(lst)
@@ -135,6 +168,9 @@ def list3():
     print(lst[1][2])
 
 def list4():
+    """
+    示範列表的淺拷貝與深拷貝的差異。
+    """
     a = [1,2,3]
     b = a
     c = a[:]
@@ -144,6 +180,9 @@ def list4():
     print(a,b,c,d,sep="\n")
 
 def list5():
+    """
+    輸出多維列表的每個元素。
+    """
     lst = [[4,8,5,9],[13,16,19,15],[28,25,29,24]]
     print("lst = ",end=" ")
     print(lst)
@@ -153,13 +192,18 @@ def list5():
             print(f"lst{[i]}{[j]} = {lst[i][j]:2d}",end=" ")
 
 def list6():
+    """
+    使用列表生成式創建多維列表。
+    """
     A = [0 for x in range(2)]
     print(A)
     arr = [A for Y in range(4)]
     print(arr)
 
-
 def scorelist():
+    """
+    計算並輸出每位學生的總分與各科平均分。
+    """
     no = [1,2,3,4]
     score = [[87,64,88],[93,72,86],[80,88,89],[79,91,90]]  
     print("編號 語文 數理 智力 總分")
@@ -180,6 +224,9 @@ def scorelist():
         print(f"{vSum/len(no):4.1f}",end="  ")
      
 def randint2():
+    """
+    生成一組不重複的隨機數，並輸出結果。
+    """
     max = 35
     min = 18
     num = 6
@@ -198,6 +245,9 @@ def randint2():
         print(f"第{i+1}個亂數:{arr[i]}")
 
 def openfilee():
+    """
+    檢查檔案是否存在，讀取內容，追加新數據後重新讀取檔案。
+    """
     fName="class.txt"
     if os.path.isfile(fName):
         fr=open(fName,"r")
@@ -222,4 +272,4 @@ def openfilee():
         fr.close()
     else:
         print(fName,"不存在")
-           
+
