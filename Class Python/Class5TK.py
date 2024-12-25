@@ -3,7 +3,7 @@ from PIL import Image,ImageTk
 
 root = tk.Tk()
 root.title("oxxo.studio")
-root.geometry("154x244")
+root.geometry("500x500")
 
 img = Image.open("images.jpg").resize((150,240))
 tk_img = ImageTk.PhotoImage(img)
