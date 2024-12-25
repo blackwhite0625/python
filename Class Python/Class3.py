@@ -35,8 +35,8 @@ lblScore.grid(row=1,column=0)
 txtScore = tk.Entry(win,width=15,textvariable=score)
 txtScore.grid(row=1,column=1)
 
-btn = tk.Button(win,text="分數",width=15,textvariable=tktk)
-btn.grid(row=2,column=0)
+btn = tk.Button(win,text="確定",width=15,command=tktk)
+btn.grid(row=3,column=1)
 
 lblResult = tk.Label(win,text=" ",padx=10,pady=8)
 lblResult.grid(row=2,column=1)
